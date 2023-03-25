@@ -7,8 +7,6 @@ interface IExecutionDelegate {
     function revokeApproval() external;
     function grantApproval() external;
 
-    function transferERC721Unsafe(address collection, address from, address to, uint256 tokenId) external;
-
     function transferERC721(address collection, address from, address to, uint256 tokenId) external;
 
     function transferERC1155(address collection, address from, address to, uint256 tokenId, uint256 amount) external;

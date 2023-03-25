@@ -2,6 +2,7 @@
 pragma solidity 0.8.18;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {IPolicyManager} from "src/interfaces/IPolicyManager.sol";
@@ -12,6 +13,7 @@ import {IPolicyManager} from "src/interfaces/IPolicyManager.sol";
  */
 contract PolicyManager is IPolicyManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using Address for address;
 
     EnumerableSet.AddressSet private _whitelistedTokens;
     EnumerableSet.AddressSet private _blacklistedContracts;
@@ -34,6 +36,7 @@ contract PolicyManager is IPolicyManager, Ownable {
 
     function addPartner(address _collection, address _feeAddress) external onlyOwner {
         require(!partnersCollection[_collection], "Collection already a partner");
+        require(_feeAddress.isContract() == false, "Fee address can not be a contract");
         partnersCollection[_collection] = true;
         partnersFeeAddress[_collection] = _feeAddress;
         _partners.add(_collection);

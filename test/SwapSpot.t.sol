@@ -10,7 +10,7 @@ import {SwapSpot} from "src/SwapSpot.sol";
 import {PolicyManager} from "src/PolicyManager.sol";
 import {ExecutionDelegate} from "src/ExecutionDelegate.sol";
 
-import { Offer, Fee, OfferType } from "src/lib/OfferStruct.sol";
+import { Offer, Fee, OfferType, AssetType } from "src/lib/OfferStruct.sol";
 
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
@@ -32,6 +32,7 @@ contract SwapSpotTest is DSTest {
     address internal feeAddress;
 
     Offer[] internal offers;
+    AssetType[] internal assetTypes;
 
     mockERC20 internal token1;
     mockERC20 internal token2;
@@ -158,6 +159,7 @@ contract SwapSpotTest is DSTest {
     function testListOffer_ShouldRevert_WhenNotEnoughEthValue() public {
         tokenIds.push(1);
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -168,7 +170,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -182,6 +185,7 @@ contract SwapSpotTest is DSTest {
 
         tokenIds.push(1);
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -192,7 +196,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -203,7 +208,7 @@ contract SwapSpotTest is DSTest {
     function testListOffer_ShouldRevert_WhenListingParameterIsBuy() public {
         tokenIds.push(1);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory offer = Offer({
             trader: users[0],
             side: OfferType.Buy,
@@ -213,7 +218,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -224,6 +230,7 @@ contract SwapSpotTest is DSTest {
     function testListOffer_ShouldRevert_WhenMatchingIdIs1() public {
         tokenIds.push(1);
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -234,7 +241,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -244,6 +252,8 @@ contract SwapSpotTest is DSTest {
 
     function testListOffer_ShouldRevert_WhenTokenIdsLengthIs0() public {
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
+
         Offer memory offer = Offer({
             trader: users[0],
             side: OfferType.Sell,
@@ -253,7 +263,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -263,6 +274,8 @@ contract SwapSpotTest is DSTest {
 
     function testListOffer_ShouldRevert_WhenCollectionsLengthIs0() public {
         tokenIds.push(1);
+        assetTypes.push(AssetType.ERC721);
+
         Offer memory offer = Offer({
             trader: users[0],
             side: OfferType.Sell,
@@ -272,7 +285,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -280,10 +294,33 @@ contract SwapSpotTest is DSTest {
         swapspot.listOffer{value: 50 ether}(offer);
     }
 
+    function testListOffer_ShouldRevert_WhenPriceIsNotNull() public {
+        tokenIds.push(1);
+        collections.push(address(nft1));
+        Offer memory offer = Offer({
+            trader: users[0],
+            side: OfferType.Sell,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 1,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 0,
+            assetTypes: assetTypes
+        });
+
+        vm.prank(users[0]);
+        vm.expectRevert("Price must be 0 for sell offers");
+        swapspot.listOffer{value: 50 ether}(offer);
+    }
+
     function testListOffer_ShouldRevert_WhenCollectionsAndTokensIdsLengthMismatched() public {
         tokenIds.push(1);
         tokenIds.push(2);
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
+
         Offer memory offer = Offer({
             trader: users[0],
             side: OfferType.Sell,
@@ -293,7 +330,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -316,7 +354,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -327,6 +366,7 @@ contract SwapSpotTest is DSTest {
     function testListOffer_ShouldRevert_WhenCallerIsNotTrader() public {
         tokenIds.push(1);
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -337,7 +377,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[1]);
@@ -348,6 +389,7 @@ contract SwapSpotTest is DSTest {
     function testListOffer_ShouldRevert_WhenTimestampIsNotInRange() public {
         tokenIds.push(1);
         collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
 
         // listingTime is late than expirationTime
         Offer memory offer = Offer({
@@ -359,7 +401,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp + 10 days,
             expirationTime: block.timestamp,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -376,7 +419,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: deploymentTimestamp,
             expirationTime: deploymentTimestamp,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -393,7 +437,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: deploymentTimestamp,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -410,7 +455,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: deploymentTimestamp + 1 days,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -437,7 +483,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -461,7 +508,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -474,6 +522,8 @@ contract SwapSpotTest is DSTest {
         tokenIds.push(2);
         collections.push(address(nft1));
         collections.push(address(nft2));
+        assetTypes.push(AssetType.ERC721);
+        assetTypes.push(AssetType.ERC721);
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -484,7 +534,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -531,10 +582,15 @@ contract SwapSpotTest is DSTest {
         swapspot.cancelOffers(offers);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                            MAKE OFFER TESTS
+    //////////////////////////////////////////////////////////////*/
+
     function _initSimpleOffer(OfferType side) internal returns (Offer memory) {
         tokenIds.push(1);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
+        
         Offer memory offer = Offer({
             trader: users[0],
             side: side,
@@ -544,7 +600,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: block.timestamp - 1,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 0
+            matchingId: 0,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -552,6 +609,7 @@ contract SwapSpotTest is DSTest {
 
         delete tokenIds;
         delete collections;
+        delete assetTypes;
 
         return offer;
     }
@@ -560,7 +618,8 @@ contract SwapSpotTest is DSTest {
         Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
+        
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -570,7 +629,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[2]);
@@ -582,7 +642,7 @@ contract SwapSpotTest is DSTest {
         Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -592,7 +652,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[1]);
@@ -604,7 +665,7 @@ contract SwapSpotTest is DSTest {
         Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
         tokenIds.push(2);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[0],
             side: OfferType.Buy,
@@ -614,7 +675,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
@@ -622,14 +684,35 @@ contract SwapSpotTest is DSTest {
         swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
     }
 
-    function testMakeOffer_ShouldRevert_WhenTakerOfferDoesNotMatchMakerOfferMatchingId() public {
+    function testMakeOffer_ShouldRevert_WhenTakerOfferDoesNotMatchMakerOfferMatchingIdBecauseOfPrice() public {
+        // swapId 1
         Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
-        vm.warp(deploymentTimestamp + 1 days);
-        Offer memory secondOffer = _initSimpleOffer(OfferType.Sell);
 
+        // swapId 2
+        tokenIds.push(1);
+        collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
+        Offer memory wrongOffer = Offer({
+            trader: users[0],
+            side: OfferType.Sell,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 1,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: 0,
+            assetTypes: assetTypes
+        });
+
+        delete tokenIds;
+        delete collections;
+
+
+        // makerOffer
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -639,7 +722,34 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: timestamp,
             expirationTime: deploymentTimestamp + 10 days,
-            matchingId: 2
+            matchingId: 2,
+            assetTypes: assetTypes
+        });
+
+        vm.prank(users[1]);
+        vm.expectRevert(SwapSpot.OffersDoNotMatch.selector);
+        swapspot.makeOffer{value: 2 ether}(makerOffer, wrongOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenTakerOfferDoesNotMatchMakerOfferMatchingId() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        vm.warp(deploymentTimestamp + 1 days);
+        Offer memory secondOffer = _initSimpleOffer(OfferType.Sell);
+
+        tokenIds.push(11);
+        collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 2,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[1]);
@@ -652,7 +762,7 @@ contract SwapSpotTest is DSTest {
 
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -662,14 +772,15 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: block.timestamp - 1,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[0]);
         swapspot.cancelOffer(takerOffer);
 
         vm.prank(users[1]);
-        vm.expectRevert(SwapSpot.AlreadyCancelledOrFilled.selector);
+        vm.expectRevert(abi.encodeWithSelector(SwapSpot.OfferInvalidParameters.selector, 0));
         swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
     }
 
@@ -678,7 +789,7 @@ contract SwapSpotTest is DSTest {
 
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Sell,
@@ -688,7 +799,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: block.timestamp - 1,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[1]);
@@ -702,7 +814,7 @@ contract SwapSpotTest is DSTest {
 
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -712,7 +824,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: block.timestamp - 1,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[1]);
@@ -725,7 +838,7 @@ contract SwapSpotTest is DSTest {
 
         tokenIds.push(11);
         collections.push(address(nft1));
-
+        assetTypes.push(AssetType.ERC721);
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -735,7 +848,8 @@ contract SwapSpotTest is DSTest {
             price: 0,
             listingTime: block.timestamp - 1,
             expirationTime: block.timestamp + 10 days,
-            matchingId: 1
+            matchingId: 1,
+            assetTypes: assetTypes
         });
 
         vm.prank(users[1]);

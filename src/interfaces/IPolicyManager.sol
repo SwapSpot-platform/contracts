@@ -2,6 +2,7 @@
 pragma solidity 0.8.18;
 
 interface IPolicyManager {
+    function partnersFeeAddress(address _collection) external view returns (address);
     function blacklistContract(address _contract) external;
     function addToken(address _token) external;
     function addPartner(address _collection, address _feeAddress) external;

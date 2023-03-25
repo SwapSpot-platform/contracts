@@ -14,6 +14,7 @@ struct Offer {
     uint256 listingTime;
     uint256 expirationTime;
     uint256 matchingId;
+    AssetType[] assetTypes;
 }
 
 struct Fee {

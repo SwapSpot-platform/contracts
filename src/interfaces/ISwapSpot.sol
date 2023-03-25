@@ -18,4 +18,6 @@ interface ISwapSpot {
     function acceptOffer(Offer calldata makerOffer, Offer calldata takerOffer) external;
     function cancelOffer(Offer calldata offer) external;
     function cancelOffers(Offer[] calldata offers) external;
+
+    
 }
