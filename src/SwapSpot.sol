@@ -10,6 +10,9 @@ import { ISwapSpot } from "src/interfaces/ISwapSpot.sol";
 import { IExecutionDelegate } from "src/interfaces/IExecutionDelegate.sol";
 import { IPolicyManager } from "src/interfaces/IPolicyManager.sol";
 
+import "forge-std/console.sol";
+
+
 contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     // trading is open
     uint256 public isOpen;
@@ -26,6 +29,7 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     mapping(uint256 => Offer) public offersById;
     mapping(address => uint256[]) public offersByTrader;
     mapping(address => bool) public partnersCollection;
+    mapping(address => address) public partnersFeeAddress;
 
     event OfferCancelled(bytes32 indexed hash);
     event OfferListed(bytes32 indexed hash);
@@ -40,11 +44,12 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     );
 
     error NotOpen();
+    error NotEnoughFunds();
     error WrongCaller();
     error AlreadyCancelledOrFilled();
     
     // 0 for buying, 1 for selling
-    error OfferInvalidParameters(uint256);
+    error OfferInvalidParameters(uint256 side);
 
     modifier tradingOpen() {
         if (isOpen == 0) revert NotOpen();
@@ -55,11 +60,13 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(IExecutionDelegate _executionDelegate, IPolicyManager _policyManager) external initializer {
+    function initialize(address _executionDelegate, address _policyManager) external initializer {
         __Ownable_init();
         __UUPSUpgradeable_init();
-        executionDelegate = _executionDelegate;
-        policyManager = _policyManager;
+        executionDelegate = IExecutionDelegate(_executionDelegate);
+        policyManager = IPolicyManager(_policyManager);
+        isOpen = 1;
+        fee = Fee(50 ether, 2 ether);
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -68,20 +75,16 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     /*//////////////////////////////////////////////////////////////
                                  OWNER
     //////////////////////////////////////////////////////////////*/
-    function open() external onlyOwner {
-        isOpen = 1;
-    }
-
-    function close() external onlyOwner {
-        isOpen = 0;
+    function changeTradingState() external onlyOwner {
+        isOpen = isOpen == 0 ? 1 : 0;
     }
     
-    function setExecutionDelegate(IExecutionDelegate _executionDelegate) external onlyOwner {
-        executionDelegate = _executionDelegate;
+    function setExecutionDelegate(address _executionDelegate) external onlyOwner {
+        executionDelegate = IExecutionDelegate(_executionDelegate);
     }
 
-    function setPolicyManager(IPolicyManager _policyManager) external onlyOwner {
-        policyManager = _policyManager;
+    function setPolicyManager(address _policyManager) external onlyOwner {
+        policyManager = IPolicyManager(_policyManager);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -89,7 +92,8 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     //////////////////////////////////////////////////////////////*/
     function listOffer(Offer calldata offer) external payable tradingOpen {
         require(offer.side == OfferType.Sell, "Only sell offers are allowed");
-        
+        if (msg.value < fee.listingFee) revert NotEnoughFunds();
+
         bytes32 offerHash = _hashOffer(offer, nonces[offer.trader]);
         if (_validateOfferParameters(offer, offerHash, true) == false) revert OfferInvalidParameters(0);
 
@@ -141,16 +145,6 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         returns (bool)
     {
         return (listingTime < block.timestamp) && (expirationTime == 0 || block.timestamp < expirationTime);
-    }
-
-    function _transferListingFees(Offer calldata offer) internal {
-        bool isPartner;
-        for (uint i = 0; i < offer.collections.length; i++) {
-            if (partnersCollection[offer.collections[i]]) {
-                isPartner = true;
-                break;
-            }
-        }
     }
 
     /*//////////////////////////////////////////////////////////////
