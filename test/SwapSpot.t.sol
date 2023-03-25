@@ -29,6 +29,9 @@ contract SwapSpotTest is DSTest {
     Utilities internal utils;
     address payable[] internal users;
     address internal owner;
+    address internal feeAddress;
+
+    Offer[] internal offers;
 
     mockERC20 internal token1;
     mockERC20 internal token2;
@@ -48,7 +51,7 @@ contract SwapSpotTest is DSTest {
 
     function setUp() public {
         utils = new Utilities();
-        users = utils.createUsers(2);
+        users = utils.createUsers(6);
 
         token1 = new mockERC20();
         token2 = new mockERC20();
@@ -66,7 +69,7 @@ contract SwapSpotTest is DSTest {
         executionDelegate = new ExecutionDelegate();
 
         swapspot = SwapSpot(address(proxy));
-        swapspot.initialize(address(executionDelegate), address(policyManager));
+        swapspot.initialize(address(executionDelegate), address(policyManager), feeAddress);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 1 days);
@@ -89,7 +92,7 @@ contract SwapSpotTest is DSTest {
     function testInitialize_ShouldRevert_WhenAlreadyInitialized() public {
         vm.prank(users[0]);
         vm.expectRevert();
-        swapspot.initialize(address(executionDelegate), address(policyManager));
+        swapspot.initialize(address(executionDelegate), address(policyManager), address(feeAddress));
     }
 
     function testInitialize_ShouldHaveRightOwner_WhenDeployed() public {
@@ -100,7 +103,7 @@ contract SwapSpotTest is DSTest {
         assertEq(address(swapspot.executionDelegate()), address(executionDelegate));
         assertEq(address(swapspot.policyManager()), address(policyManager));
         assertEq(swapspot.isOpen(), 1);
-
+        assertEq(swapspot.feeAddress(), feeAddress);
         (uint128 listingFee, uint128 buyingFee) = swapspot.fee();
         assertEq(listingFee, 50 ether);
         assertEq(buyingFee, 2 ether);
@@ -152,7 +155,7 @@ contract SwapSpotTest is DSTest {
         assertEq(address(swapspot.policyManager()), address(newPolicyManager));
     }
 
-    function testListOfer_ShouldRevert_WhenNotEnoughEthValue() public {
+    function testListOffer_ShouldRevert_WhenNotEnoughEthValue() public {
         tokenIds.push(1);
         collections.push(address(nft1));
 
@@ -338,7 +341,7 @@ contract SwapSpotTest is DSTest {
         });
 
         vm.prank(users[1]);
-        vm.expectRevert(abi.encodeWithSelector(SwapSpot.OfferInvalidParameters.selector, 0));
+        vm.expectRevert(SwapSpot.WrongCaller.selector);
         swapspot.listOffer{value: 50 ether}(offer);
     }
 
@@ -488,7 +491,257 @@ contract SwapSpotTest is DSTest {
         swapspot.listOffer{value: 50 ether}(offer);
 
         assertEq(address(swapspot).balance, 50 ether);
+        assertEq(swapspot.swapId(), 1);
     }
 
+    function testCancelOffer_ShouldRevert_WhenCallerIsNotTrader() public {
+        Offer memory offer = _initSimpleOffer(OfferType.Sell);
 
+        vm.prank(users[1]);
+        vm.expectRevert(SwapSpot.WrongCaller.selector);
+        swapspot.cancelOffer(offer);
+    }
+
+    function testCancelOffer_ShouldRevert_WhenAlreadyCancelled() public {
+        Offer memory offer = _initSimpleOffer(OfferType.Sell);
+
+        vm.prank(users[0]);
+        swapspot.cancelOffer(offer);
+
+        vm.prank(users[0]);
+        vm.expectRevert(SwapSpot.AlreadyCancelledOrFilled.selector);
+        swapspot.cancelOffer(offer);
+    }
+
+    function testCancelOffer_ShouldSucceed_WhenOfferIsValid() public {
+        Offer memory offer = _initSimpleOffer(OfferType.Sell);
+
+        vm.prank(users[0]);
+        swapspot.cancelOffer(offer);
+    }
+
+    function testCancelOffers_ShouldSucceed_WhenOffersAreValid() public {
+        Offer memory offer1 = _initSimpleOffer(OfferType.Sell);
+        vm.warp(1 seconds);
+        Offer memory offer2 = _initSimpleOffer(OfferType.Sell);
+        offers.push(offer1);
+        offers.push(offer2); 
+
+        vm.prank(users[0]);
+        swapspot.cancelOffers(offers);
+    }
+
+    function _initSimpleOffer(OfferType side) internal returns (Offer memory) {
+        tokenIds.push(1);
+        collections.push(address(nft1));
+
+        Offer memory offer = Offer({
+            trader: users[0],
+            side: side,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: 0
+        });
+
+        vm.prank(users[0]);
+        if (side == OfferType.Sell) swapspot.listOffer{value: 50 ether}(offer);
+
+        delete tokenIds;
+        delete collections;
+
+        return offer;
+    }
+
+    function testMakeOffer_ShouldRevert_WhenCallerIsNotTrader() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[2]);
+        vm.expectRevert(SwapSpot.WrongCaller.selector);
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenNotEnoughEthValue() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[1]);
+        vm.expectRevert(SwapSpot.NotEnoughFunds.selector);
+        swapspot.makeOffer{value: 1 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenMakerOfferIsSameAsTakerOffer() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        tokenIds.push(2);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[0],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[0]);
+        vm.expectRevert("Cannot make offer with yourself");
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenTakerOfferDoesNotMatchMakerOfferMatchingId() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        vm.warp(deploymentTimestamp + 1 days);
+        Offer memory secondOffer = _initSimpleOffer(OfferType.Sell);
+
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 2
+        });
+
+        vm.prank(users[1]);
+        vm.expectRevert(SwapSpot.OffersDoNotMatch.selector);
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenTakerOfferIsCancelled() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[0]);
+        swapspot.cancelOffer(takerOffer);
+
+        vm.prank(users[1]);
+        vm.expectRevert(SwapSpot.AlreadyCancelledOrFilled.selector);
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenListingParameterIsSell() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Sell,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[1]);
+        vm.expectRevert("Only buy offers are allowed");
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenTakerOfferIsExpired() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        vm.warp(deploymentTimestamp + 11 days);
+
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[1]);
+        vm.expectRevert(abi.encodeWithSelector(SwapSpot.OfferInvalidParameters.selector, 0));
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldSucceed_WhenOffersAreValid() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+
+        tokenIds.push(11);
+        collections.push(address(nft1));
+
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 0,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: 1
+        });
+
+        vm.prank(users[1]);
+        swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
+
+        assertEq(feeAddress.balance, 2 ether);
+        assertEq(swapspot.swapId(), 2);
+    }
 }

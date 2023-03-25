@@ -15,6 +15,12 @@ contract PolicyManager is IPolicyManager, Ownable {
 
     EnumerableSet.AddressSet private _whitelistedTokens;
     EnumerableSet.AddressSet private _blacklistedContracts;
+    EnumerableSet.AddressSet private _partners;
+
+    // check if a collection is a partner
+    mapping(address => bool) public partnersCollection;
+    // get the fee address for a partner collection
+    mapping(address => address) public partnersFeeAddress;
 
     function blacklistContract(address _contract) external override onlyOwner {
         require(!_blacklistedContracts.contains(_contract), "Contract already blacklisted");
@@ -24,6 +30,13 @@ contract PolicyManager is IPolicyManager, Ownable {
     function addToken(address _token) external override onlyOwner {
         require(!_whitelistedTokens.contains(_token), "Token already whitelisted");
         _whitelistedTokens.add(_token);
+    }
+
+    function addPartner(address _collection, address _feeAddress) external onlyOwner {
+        require(!partnersCollection[_collection], "Collection already a partner");
+        partnersCollection[_collection] = true;
+        partnersFeeAddress[_collection] = _feeAddress;
+        _partners.add(_collection);
     }
 
     function isContractBlacklisted(address _contract) external view override returns (bool) {
@@ -50,5 +63,14 @@ contract PolicyManager is IPolicyManager, Ownable {
             tokens[i] = _whitelistedTokens.at(i);
         }
         return (tokens, length);
+    }
+
+    function viewPartners() external view override returns (address[] memory, uint256) {
+        uint256 length = _partners.length();
+        address[] memory partners = new address[](length);
+        for (uint256 i = 0; i < length; i++) {
+            partners[i] = _partners.at(i);
+        }
+        return (partners, length);
     }
 }

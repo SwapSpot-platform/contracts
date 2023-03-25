@@ -8,7 +8,7 @@ interface ISwapSpot {
     
     function changeTradingState() external;
 
-    function initialize(address _executionDelegate, address _policyManager) external;
+    function initialize(address _executionDelegate, address _policyManager, address _feeAddress) external;
     function setExecutionDelegate(address _executionDelegate) external;
     function setPolicyManager(address _policyManager) external;
 
