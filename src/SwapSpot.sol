@@ -188,7 +188,7 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         _setStorageOffers(makerOffer);
 
         // transfer fees to project
-        (bool sent,) = feeAddress.call{value: msg.value}("");
+        (bool sent,) = feeAddress.call{value: fee.buyingFee}("");
         require(sent, "Failed to send Ether");
 
         emit OfferMade(offerHash);
@@ -213,7 +213,14 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         cancelledOrFilled[takerOfferHash] = true;
 
         _transferFees(takerOffer.collections);
-        _executeFundsTransfer(makerOffer.trader, takerOffer.trader, makerOffer.paymentToken, makerOffer.price);
+        if (makerOffer.price != 0) {
+            _executeFundsTransfer(
+                makerOffer.trader, 
+                takerOffer.trader, 
+                makerOffer.paymentToken, 
+                makerOffer.price
+            );
+        }
         _executeTokensTransfer(
             takerOffer.trader, 
             makerOffer.trader, 
@@ -325,8 +332,8 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     //////////////////////////////////////////////////////////////*/
     function _executeFundsTransfer(address maker, address taker, address paymentToken, uint256 price) internal {
         if (paymentToken == address(0)) {
-            (bool sent,) = maker.call{value: price}("");
-            require(sent, "Failed to send Ether");
+            (bool sent,) = taker.call{value: price}("");
+            require(sent, "Failed to send Ether to taker");
         } else {
             executionDelegate.transferERC20(paymentToken, maker, taker, price);
         }
@@ -343,7 +350,7 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     {
         for (uint i = 0; i < collection.length; i++) {
             if (assetTypes[i] == AssetType.ERC721) {
-                executionDelegate.transferERC721(collection[i], maker, taker, tokenIds[i]);
+                executionDelegate.transferERC721(maker, taker, collection[i], tokenIds[i]);
             } else {
                 executionDelegate.transferERC1155(collection[i], maker, taker, tokenIds[i], 1);
             }
@@ -379,14 +386,18 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
 
         // can't be more than 8 partners
         uint256 feeValue = 2.5 ether;
+        uint256 totalSent;
         address partner;
         for(uint256 i = 0; i < uniqueAddresses.length; i++) {
             partner = policyManager.partnersFeeAddress(uniqueAddresses[i]);
             if (partner != address(0)) {
-                (bool sent,) = partner.call{value: feeValue}("");
-                require(sent, "Failed to send Ether");
+                totalSent += feeValue;
+                (bool s,) = partner.call{value: feeValue}("");
+                require(s, "Failed to send Ether to partner");
             }
         }
+        (bool sent,) = feeAddress.call{value: 50 ether - totalSent}("");
+        require(sent, "Failed to send Ether to feeAddress");
     }
 
 

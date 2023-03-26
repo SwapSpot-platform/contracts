@@ -619,7 +619,7 @@ contract SwapSpotTest is DSTest {
         tokenIds.push(11);
         collections.push(address(nft1));
         assetTypes.push(AssetType.ERC721);
-        
+
         Offer memory makerOffer = Offer({
             trader: users[1],
             side: OfferType.Buy,
@@ -858,4 +858,81 @@ contract SwapSpotTest is DSTest {
         assertEq(feeAddress.balance, 2 ether);
         assertEq(swapspot.swapId(), 2);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                        TEST ACCEPT OFFER LOGIC
+    //////////////////////////////////////////////////////////////*/
+    function _createSimpleOffer(OfferType side, address user, uint256 mId) internal returns (Offer memory offer) {
+        if (user == users[0]) {
+            tokenIds.push(1);
+        } else if (user == users[1]) {
+            tokenIds.push(11);
+        }
+        collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
+
+        uint256 price;
+        if (side == OfferType.Sell) {
+            mId = 0;
+            price = 0 ether;
+        } else {
+            price = 10 ether;
+        }
+        
+        offer = Offer({
+            trader: user,
+            side: side,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: price,
+            listingTime: block.timestamp - 1,
+            expirationTime: block.timestamp + 10 days,
+            matchingId: mId,
+            assetTypes: assetTypes
+        });
+
+        delete tokenIds;
+        delete collections;
+        delete assetTypes;
+    }
+
+    function testAcceptOffer_ShouldSucceed_WhenOffersAreValid() public {
+        Offer memory takerOffer = _createSimpleOffer(OfferType.Sell, users[0], 0);
+        Offer memory makerOffer = _createSimpleOffer(OfferType.Buy, users[1], 1);
+
+        uint256 takerBalanceBefore = users[0].balance;
+        uint256 makerBalanceBefore = users[1].balance;
+
+        vm.prank(users[0]);
+        swapspot.listOffer{value: 50 ether}(takerOffer);
+
+        vm.prank(users[1]);
+        swapspot.makeOffer{value: 12 ether}(makerOffer, takerOffer);
+
+        vm.prank(owner);
+        executionDelegate.approveContract(address(swapspot));
+
+        vm.prank(users[1]);
+        nft1.setApprovalForAll(address(executionDelegate), true);
+
+        vm.startPrank(users[0]);
+        nft1.setApprovalForAll(address(executionDelegate), true);
+        swapspot.acceptOffer(makerOffer, takerOffer);
+        vm.stopPrank();
+
+        uint256 takerBalanceAfter = users[0].balance;
+        uint256 makerBalanceAfter = users[1].balance;
+
+        assertEq(feeAddress.balance, 52 ether);
+        assertEq(users[0], nft1.ownerOf(11));
+        assertEq(users[1], nft1.ownerOf(1));
+        assertEq(swapspot.swapId(), 2);
+
+        // takerBalance -> 50 ETH of listing fees, get 10 from taker offer -> difference of 40 ETH
+        // makerBalance -> 2 ETH of offer fees + 10 ETH from offer price -> difference of 12
+        assertEq(takerBalanceBefore - takerBalanceAfter, 40 ether);
+        assertEq(makerBalanceBefore - makerBalanceAfter, 12 ether);
+    }
+
 }

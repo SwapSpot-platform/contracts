@@ -46,9 +46,9 @@ contract ExecutionDelegate is IExecutionDelegate, Ownable {
     }
 
     function transferERC721(
-        address collection,
         address from,
         address to,
+        address collection,
         uint256 tokenId
     ) 
         external 
