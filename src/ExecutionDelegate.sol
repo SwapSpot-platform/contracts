@@ -25,6 +25,7 @@ contract ExecutionDelegate is IExecutionDelegate, Ownable {
         require(approvedContracts[msg.sender], "Contract is not approved to make transfers");
         _;
     }
+
     function approveContract(address _contract) external onlyOwner {
         approvedContracts[_contract] = true;
         emit ApproveContract(_contract);
@@ -45,47 +46,25 @@ contract ExecutionDelegate is IExecutionDelegate, Ownable {
         emit GrantApproval(msg.sender);
     }
 
-    function transferERC721(
-        address from,
-        address to,
-        address collection,
-        uint256 tokenId
-    ) 
-        external 
-        approvedContract 
-    {
+    function transferERC721(address from, address to, address collection, uint256 tokenId) external approvedContract {
         require(revokedContractsApproval[from] == false, "User has revoked approval");
         IERC721(collection).safeTransferFrom(from, to, tokenId);
     }
 
-    function transferERC1155(
-        address collection, 
-        address from, 
-        address to, 
-        uint256 tokenId, 
-        uint256 amount
-    ) 
+    function transferERC1155(address collection, address from, address to, uint256 tokenId, uint256 amount)
         external
-        approvedContract 
+        approvedContract
     {
         require(revokedContractsApproval[from] == false, "User has revoked approval");
         IERC1155(collection).safeTransferFrom(from, to, tokenId, amount, "");
     }
 
-    function transferERC20(
-        address token, 
-        address from, 
-        address to, 
-        uint256 amount
-    )
-        approvedContract
-        external
-    {
+    function transferERC20(address token, address from, address to, uint256 amount) external approvedContract {
         require(revokedContractsApproval[from] == false, "User has revoked approval");
         bytes memory data = abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, amount);
         bytes memory returndata = token.functionCall(data);
         if (returndata.length > 0) {
-          require(abi.decode(returndata, (bool)), "ERC20 transfer failed");
+            require(abi.decode(returndata, (bool)), "ERC20 transfer failed");
         }
     }
 }

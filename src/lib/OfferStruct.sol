@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.18;
 
-enum OfferType { Buy, Sell }
-enum AssetType { ERC721, ERC1155 }
+enum OfferType {
+    Buy,
+    Sell
+}
+
+enum AssetType {
+    ERC721,
+    ERC1155
+}
 
 struct Offer {
     address trader;
@@ -10,10 +17,10 @@ struct Offer {
     address[] collections;
     uint256[] tokenIds;
     address paymentToken;
-    uint256 price;
-    uint256 listingTime;
-    uint256 expirationTime;
-    uint256 matchingId;
+    uint96 price;
+    uint64 listingTime;
+    uint64 expirationTime;
+    uint128 matchingId;
     AssetType[] assetTypes;
 }
 

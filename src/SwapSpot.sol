@@ -5,13 +5,12 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import { Offer, Fee, OfferType, AssetType } from "src/lib/OfferStruct.sol";
-import { ISwapSpot } from "src/interfaces/ISwapSpot.sol";
-import { IExecutionDelegate } from "src/interfaces/IExecutionDelegate.sol";
-import { IPolicyManager } from "src/interfaces/IPolicyManager.sol";
+import {Offer, Fee, OfferType, AssetType} from "src/lib/OfferStruct.sol";
+import {ISwapSpot} from "src/interfaces/ISwapSpot.sol";
+import {IExecutionDelegate} from "src/interfaces/IExecutionDelegate.sol";
+import {IPolicyManager} from "src/interfaces/IPolicyManager.sol";
 
 import "forge-std/console.sol";
-
 
 contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     // trading is open
@@ -34,18 +33,12 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     mapping(uint256 => Offer) public offersById;
     // address => array of offerIds made by user
     mapping(address => uint256[]) public offersByTrader;
-    
 
     event OfferCanceled(bytes32 indexed hash);
     event OfferListed(bytes32 indexed hash);
     event OfferMade(bytes32 indexed hash);
     event OffersMatched(
-        address indexed maker,
-        address indexed taker,
-        Offer sell,
-        bytes32 sellHash,
-        Offer buy,
-        bytes32 buyHash
+        address indexed maker, address indexed taker, Offer sell, bytes32 sellHash, Offer buy, bytes32 buyHash
     );
 
     error NotOpen();
@@ -55,8 +48,8 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     error InexistantMatchingId();
     error OffersDoNotMatch();
     error OfferExpired();
-    
-    // 0 for buying, 1 for selling
+
+    // 0 for selling, 1 for buying
     error OfferInvalidParameters(uint256 side);
 
     modifier tradingOpen() {
@@ -72,7 +65,11 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     /// @param _executionDelegate The address of the execution delegate contract
     /// @param _policyManager The address of the policy manager contract
     /// @param _feeAddress The address that will receive the fees
-    function initialize(address _executionDelegate, address _policyManager, address _feeAddress) external initializer {
+    function initialize(
+        address _executionDelegate, 
+        address _policyManager, 
+        address _feeAddress
+    ) external initializer {
         __Ownable_init();
         __UUPSUpgradeable_init();
         executionDelegate = IExecutionDelegate(_executionDelegate);
@@ -84,7 +81,6 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-
     /*//////////////////////////////////////////////////////////////
                                  OWNER
     //////////////////////////////////////////////////////////////*/
@@ -94,7 +90,7 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     function changeTradingState() external onlyOwner {
         isOpen = isOpen == 0 ? 1 : 0;
     }
-    
+
     /// @notice Set the execution delegate contract
     /// @dev The execution delegate contract is the one that will execute the trades
     function setExecutionDelegate(address _executionDelegate) external onlyOwner {
@@ -151,17 +147,10 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
     /// @dev The takerOffer has to be a valid stored offer
     /// @param makerOffer The offer to make
     /// @param takerOffer The offer to match with
-    function makeOffer(
-        Offer calldata makerOffer,
-        Offer calldata takerOffer
-    )   
-        external 
-        payable 
-        tradingOpen 
-    {
+    function makeOffer(Offer calldata makerOffer, Offer calldata takerOffer) external payable tradingOpen {
         require(makerOffer.side == OfferType.Buy, "Only buy offers are allowed");
         require(makerOffer.trader != takerOffer.trader, "Cannot make offer with yourself");
-    
+
         if (makerOffer.trader != msg.sender) revert WrongCaller();
         // check if the fees are paid
         if (msg.value < fee.buyingFee) revert NotEnoughFunds();
@@ -224,73 +213,65 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         _executeTokensTransfer(
             takerOffer.trader, 
             makerOffer.trader, 
-            takerOffer.collections,
+            takerOffer.collections, 
             takerOffer.tokenIds, 
             takerOffer.assetTypes
         );
         _executeTokensTransfer(
             makerOffer.trader, 
             takerOffer.trader, 
-            makerOffer.collections,
+            makerOffer.collections, 
             makerOffer.tokenIds, 
             makerOffer.assetTypes
         );
 
         emit OffersMatched(
-            makerOffer.trader,
-            takerOffer.trader,
-            takerOffer,
-            takerOfferHash,
-            makerOffer,
+            makerOffer.trader, 
+            takerOffer.trader, 
+            takerOffer, 
+            takerOfferHash, 
+            makerOffer, 
             offerHash
         );
     }
 
-    function _validateOfferParameters(
-        Offer calldata offer, 
-        bytes32 offerHash, 
-        bool isListing
-    ) internal view returns (bool) {
+    function _validateOfferParameters(Offer calldata offer, bytes32 offerHash, bool isListing)
+        internal
+        view
+        returns (bool)
+    {
         return (
-            (isListing ? offer.matchingId == 0 : offer.matchingId != 0) &&
-            (offer.collections.length < 9) &&
-            (offer.collections.length == offer.assetTypes.length) &&
-            (offer.collections.length == offer.tokenIds.length) &&
-            (cancelledOrFilled[offerHash] == false) &&
-            _canSettleOffer(offer.listingTime, offer.expirationTime) &&
-            _validateCollections(offer.collections) &&
-            _validatePaymentToken(offer.paymentToken)
+            (isListing ? offer.matchingId == 0 : offer.matchingId != 0) 
+            && (offer.collections.length < 9)
+            && (offer.collections.length == offer.assetTypes.length)
+            && (offer.collections.length == offer.tokenIds.length) 
+            && (cancelledOrFilled[offerHash] == false)
+            && _canSettleOffer(offer.listingTime, offer.expirationTime) 
+            && _validateCollections(offer.collections)
+            && _validatePaymentToken(offer.paymentToken)
         );
     }
 
     function _validateCollections(address[] calldata collections) internal view returns (bool) {
-        for (uint i = 0; i < collections.length; i++) {
+        for (uint256 i = 0; i < collections.length; i++) {
             if (policyManager.isContractBlacklisted(collections[i])) return false;
         }
         return true;
     }
 
     function _validatePaymentToken(address paymentToken) internal view returns (bool) {
-        return (
-            paymentToken == WCRO ||
-            policyManager.isTokenAllowed(paymentToken) ||
-            paymentToken == address(0)
-        );
+        return (paymentToken == WCRO || policyManager.isTokenAllowed(paymentToken) || paymentToken == address(0));
     }
 
     /// @notice Check if the timestamps are valid
     /// @dev Listing timestamp must be in the past
     /// @dev Expiration timestamp must be in the future or 0 (no expiration)
-    function _canSettleOffer(uint256 listingTime, uint256 expirationTime)
-        view
-        internal
-        returns (bool)
-    {
+    function _canSettleOffer(uint256 listingTime, uint256 expirationTime) internal view returns (bool) {
         return (listingTime < block.timestamp) && (expirationTime == 0 || block.timestamp < expirationTime);
     }
 
     /// @notice Validating the matching between two offers
-    /// @dev Computes a hash of the offer got from the makerOffer matchingId 
+    /// @dev Computes a hash of the offer got from the makerOffer matchingId
     ///      and checks if it matches the takerOffer hash
     /// @dev If taker offer is already cancelled or filled, it will return false
     function _validateMatchingId(Offer calldata makerOffer, Offer calldata takerOffer) internal view returns (bool) {
@@ -298,7 +279,7 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
 
         bytes32 takerHash = _hashOffer(takerOffer, nonces[takerOffer.trader]);
         bytes32 offerFromMatchingIdHash = _hashOffer(offerFromMatchingId, nonces[offerFromMatchingId.trader]);
-        
+
         return offerFromMatchingIdHash == takerHash;
     }
 
@@ -338,17 +319,15 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
             executionDelegate.transferERC20(paymentToken, maker, taker, price);
         }
     }
-
+    
     function _executeTokensTransfer(
         address maker,
         address taker,
         address[] calldata collection,
         uint256[] calldata tokenIds,
         AssetType[] calldata assetTypes
-    ) 
-        internal 
-    {
-        for (uint i = 0; i < collection.length; i++) {
+    ) internal {
+        for (uint256 i = 0; i < collection.length; i++) {
             if (assetTypes[i] == AssetType.ERC721) {
                 executionDelegate.transferERC721(maker, taker, collection[i], tokenIds[i]);
             } else {
@@ -388,7 +367,7 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         uint256 feeValue = 2.5 ether;
         uint256 totalSent;
         address partner;
-        for(uint256 i = 0; i < uniqueAddresses.length; i++) {
+        for (uint256 i = 0; i < uniqueAddresses.length; i++) {
             partner = policyManager.partnersFeeAddress(uniqueAddresses[i]);
             if (partner != address(0)) {
                 totalSent += feeValue;
@@ -399,9 +378,6 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         (bool sent,) = feeAddress.call{value: 50 ether - totalSent}("");
         require(sent, "Failed to send Ether to feeAddress");
     }
-
-
-    
 
     /*//////////////////////////////////////////////////////////////
                                   HASH
@@ -425,11 +401,11 @@ contract SwapSpot is ISwapSpot, OwnableUpgradeable, UUPSUpgradeable {
         );
     }
 
-    function getOfferArrays(uint offerId) internal view returns (address[] memory, uint256[] memory) {
+    function getOfferArrays(uint256 offerId) public view returns (address[] memory, uint256[] memory) {
         Offer memory offer = offersById[offerId];
         return (offer.collections, offer.tokenIds);
     }
 }
 
-
 /// TODO: test à faire : expiration 0 (pas d'expiration), jouer sur les input d'offer pour voir si on peut contourner un truc
+/// et faire des tests sur l'upgrade du contrat

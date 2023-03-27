@@ -9,16 +9,13 @@ import {Utilities} from "test/utils/Utilities.sol";
 import {SwapSpot} from "src/SwapSpot.sol";
 import {PolicyManager} from "src/PolicyManager.sol";
 import {ExecutionDelegate} from "src/ExecutionDelegate.sol";
+import {Offer, Fee, OfferType, AssetType} from "src/lib/OfferStruct.sol";
 
-import { Offer, Fee, OfferType, AssetType } from "src/lib/OfferStruct.sol";
-
-import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {mockERC20} from "src/mock/mockERC20.sol";
 import {mockERC721} from "src/mock/mockERC721.sol";
 import {mockERC1155} from "src/mock/mockERC1155.sol";
-
-import "forge-std/console.sol"; 
 
 contract SwapSpotTest is DSTest {
     SwapSpot internal swapspot;
@@ -47,8 +44,8 @@ contract SwapSpotTest is DSTest {
     uint256[] internal tokenIds;
     address[] internal collections;
 
-    uint256 internal timestamp = block.timestamp;
-    uint256 internal deploymentTimestamp = timestamp + 1 days;
+    uint64 internal timestamp = uint64(block.timestamp);
+    uint64 internal deploymentTimestamp = timestamp + 1 days;
 
     function setUp() public {
         utils = new Utilities();
@@ -74,6 +71,16 @@ contract SwapSpotTest is DSTest {
         vm.stopPrank();
 
         vm.warp(block.timestamp + 1 days);
+
+        for (uint i = 0; i < users.length; i++) {
+            vm.startPrank(users[i]);
+            nft1.setApprovalForAll(address(executionDelegate), true);
+            nft2.setApprovalForAll(address(executionDelegate), true);
+            nft3.setApprovalForAll(address(executionDelegate), true);
+            erc1155_1.setApprovalForAll(address(executionDelegate), true);
+            erc1155_2.setApprovalForAll(address(executionDelegate), true);
+            vm.stopPrank();
+        }
     }
 
     function _sendTokens() internal {
@@ -128,6 +135,18 @@ contract SwapSpotTest is DSTest {
         vm.prank(owner);
         swapspot.changeTradingState();
         assertEq(swapspot.isOpen(), 1);
+    }
+
+    function testSetFeeAddress_ShouldRevert_WhenNotOwner() public {
+        vm.prank(users[0]);
+        vm.expectRevert();
+        swapspot.setFeeAddress(address(users[0]));
+    }
+
+    function testSetFeeAddress_ShouldSucceed_WhenOwner() public {
+        vm.prank(owner);
+        swapspot.setFeeAddress(address(users[0]));
+        assertEq(swapspot.feeAddress(), address(users[0]));
     }
 
     function testSetExecutionDelegate_ShouldRevert_WhenNotOwner() public {
@@ -400,7 +419,7 @@ contract SwapSpotTest is DSTest {
             paymentToken: address(0),
             price: 0,
             listingTime: timestamp + 10 days,
-            expirationTime: block.timestamp,
+            expirationTime: uint64(block.timestamp),
             matchingId: 0,
             assetTypes: assetTypes
         });
@@ -436,7 +455,7 @@ contract SwapSpotTest is DSTest {
             paymentToken: address(0),
             price: 0,
             listingTime: deploymentTimestamp,
-            expirationTime: block.timestamp + 10 days,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 0,
             assetTypes: assetTypes
         });
@@ -454,7 +473,7 @@ contract SwapSpotTest is DSTest {
             paymentToken: address(0),
             price: 0,
             listingTime: deploymentTimestamp + 1 days,
-            expirationTime: block.timestamp + 10 days,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 0,
             assetTypes: assetTypes
         });
@@ -472,7 +491,6 @@ contract SwapSpotTest is DSTest {
 
         vm.prank(owner);
         policyManager.blacklistContract(address(nft2));
-
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -497,7 +515,6 @@ contract SwapSpotTest is DSTest {
         tokenIds.push(2);
         collections.push(address(nft1));
         collections.push(address(nft2));
-
 
         Offer memory offer = Offer({
             trader: users[0],
@@ -576,7 +593,7 @@ contract SwapSpotTest is DSTest {
         vm.warp(1 seconds);
         Offer memory offer2 = _initSimpleOffer(OfferType.Sell);
         offers.push(offer1);
-        offers.push(offer2); 
+        offers.push(offer2);
 
         vm.prank(users[0]);
         swapspot.cancelOffers(offers);
@@ -590,7 +607,7 @@ contract SwapSpotTest is DSTest {
         tokenIds.push(1);
         collections.push(address(nft1));
         assetTypes.push(AssetType.ERC721);
-        
+
         Offer memory offer = Offer({
             trader: users[0],
             side: side,
@@ -598,8 +615,8 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: 0,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 0,
             assetTypes: assetTypes
         });
@@ -638,7 +655,7 @@ contract SwapSpotTest is DSTest {
         swapspot.makeOffer{value: 2 ether}(makerOffer, takerOffer);
     }
 
-    function testMakeOffer_ShouldRevert_WhenNotEnoughEthValue() public {
+    function testMakeOffer_ShouldRevert_WhenNotEnoughEthValue1() public {
         Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
         tokenIds.push(11);
         collections.push(address(nft1));
@@ -659,6 +676,29 @@ contract SwapSpotTest is DSTest {
         vm.prank(users[1]);
         vm.expectRevert(SwapSpot.NotEnoughFunds.selector);
         swapspot.makeOffer{value: 1 ether}(makerOffer, takerOffer);
+    }
+
+    function testMakeOffer_ShouldRevert_WhenNotEnoughEthValue2() public {
+        Offer memory takerOffer = _initSimpleOffer(OfferType.Sell);
+        tokenIds.push(11);
+        collections.push(address(nft1));
+        assetTypes.push(AssetType.ERC721);
+        Offer memory makerOffer = Offer({
+            trader: users[1],
+            side: OfferType.Buy,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: 10 ether,
+            listingTime: timestamp,
+            expirationTime: deploymentTimestamp + 10 days,
+            matchingId: 1,
+            assetTypes: assetTypes
+        });
+
+        vm.prank(users[1]);
+        vm.expectRevert(SwapSpot.NotEnoughFunds.selector);
+        swapspot.makeOffer{value: 11 ether}(makerOffer, takerOffer);
     }
 
     function testMakeOffer_ShouldRevert_WhenMakerOfferIsSameAsTakerOffer() public {
@@ -699,15 +739,14 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: 1,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 0,
             assetTypes: assetTypes
         });
 
         delete tokenIds;
         delete collections;
-
 
         // makerOffer
         tokenIds.push(11);
@@ -770,8 +809,8 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: 0,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 1,
             assetTypes: assetTypes
         });
@@ -797,8 +836,8 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: 0,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 1,
             assetTypes: assetTypes
         });
@@ -822,8 +861,8 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: 0,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 1,
             assetTypes: assetTypes
         });
@@ -846,8 +885,8 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: 0,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: 1,
             assetTypes: assetTypes
         });
@@ -862,7 +901,7 @@ contract SwapSpotTest is DSTest {
     /*//////////////////////////////////////////////////////////////
                         TEST ACCEPT OFFER LOGIC
     //////////////////////////////////////////////////////////////*/
-    function _createSimpleOffer(OfferType side, address user, uint256 mId) internal returns (Offer memory offer) {
+    function _createSimpleOffer(OfferType side, address user, uint128 mId) internal returns (Offer memory offer) {
         if (user == users[0]) {
             tokenIds.push(1);
         } else if (user == users[1]) {
@@ -871,14 +910,14 @@ contract SwapSpotTest is DSTest {
         collections.push(address(nft1));
         assetTypes.push(AssetType.ERC721);
 
-        uint256 price;
+        uint96 price;
         if (side == OfferType.Sell) {
             mId = 0;
             price = 0 ether;
         } else {
             price = 10 ether;
         }
-        
+
         offer = Offer({
             trader: user,
             side: side,
@@ -886,8 +925,50 @@ contract SwapSpotTest is DSTest {
             tokenIds: tokenIds,
             paymentToken: address(0),
             price: price,
-            listingTime: block.timestamp - 1,
-            expirationTime: block.timestamp + 10 days,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
+            matchingId: mId,
+            assetTypes: assetTypes
+        });
+
+        delete tokenIds;
+        delete collections;
+        delete assetTypes;
+    }
+
+    function _createSimpleOffer8Length(OfferType side, address user, uint128 mId) internal returns (Offer memory offer) {
+        if (user == users[0]) {
+            for(uint i = 1; i < 9; i++) {
+                tokenIds.push(i);
+            }
+        } else if (user == users[1]) {
+            for(uint i = 11; i < 19; i++) {
+                tokenIds.push(i);
+            }
+        }
+
+        for (uint i = 0; i < 8; i++) {
+            collections.push(address(nft1));
+            assetTypes.push(AssetType.ERC721);
+        }
+
+        uint96 price;
+        if (side == OfferType.Sell) {
+            mId = 0;
+            price = 0 ether;
+        } else {
+            price = 10 ether;
+        }
+
+        offer = Offer({
+            trader: user,
+            side: side,
+            collections: collections,
+            tokenIds: tokenIds,
+            paymentToken: address(0),
+            price: price,
+            listingTime: uint64(block.timestamp) - 1,
+            expirationTime: uint64(block.timestamp) + 10 days,
             matchingId: mId,
             assetTypes: assetTypes
         });
@@ -913,13 +994,9 @@ contract SwapSpotTest is DSTest {
         vm.prank(owner);
         executionDelegate.approveContract(address(swapspot));
 
-        vm.prank(users[1]);
-        nft1.setApprovalForAll(address(executionDelegate), true);
 
-        vm.startPrank(users[0]);
-        nft1.setApprovalForAll(address(executionDelegate), true);
+        vm.prank(users[0]);
         swapspot.acceptOffer(makerOffer, takerOffer);
-        vm.stopPrank();
 
         uint256 takerBalanceAfter = users[0].balance;
         uint256 makerBalanceAfter = users[1].balance;
@@ -935,4 +1012,37 @@ contract SwapSpotTest is DSTest {
         assertEq(makerBalanceBefore - makerBalanceAfter, 12 ether);
     }
 
+    function testAcceptOffer8Length_ShouldSucceed_WhenOffersAreValid() public {
+        Offer memory takerOffer = _createSimpleOffer8Length(OfferType.Sell, users[0], 0);
+        Offer memory makerOffer = _createSimpleOffer8Length(OfferType.Buy, users[1], 1);
+
+        uint256 takerBalanceBefore = users[0].balance;
+        uint256 makerBalanceBefore = users[1].balance;
+
+        vm.prank(users[0]);
+        swapspot.listOffer{value: 50 ether}(takerOffer);
+
+        vm.prank(users[1]);
+        swapspot.makeOffer{value: 12 ether}(makerOffer, takerOffer);
+
+        vm.prank(owner);
+        executionDelegate.approveContract(address(swapspot));
+
+
+        vm.prank(users[0]);
+        swapspot.acceptOffer(makerOffer, takerOffer);
+
+        uint256 takerBalanceAfter = users[0].balance;
+        uint256 makerBalanceAfter = users[1].balance;
+
+        assertEq(feeAddress.balance, 52 ether);
+        assertEq(users[0], nft1.ownerOf(11));
+        assertEq(users[1], nft1.ownerOf(1));
+        assertEq(swapspot.swapId(), 2);
+
+        // takerBalance -> 50 ETH of listing fees, get 10 from taker offer -> difference of 40 ETH
+        // makerBalance -> 2 ETH of offer fees + 10 ETH from offer price -> difference of 12
+        assertEq(takerBalanceBefore - takerBalanceAfter, 40 ether);
+        assertEq(makerBalanceBefore - makerBalanceAfter, 12 ether);
+    }
 }
